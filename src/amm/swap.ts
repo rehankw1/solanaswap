@@ -5,18 +5,21 @@ import { isValidAmm } from './utils'
 import Decimal from 'decimal.js'
 import { NATIVE_MINT } from '@solana/spl-token'
 import { printSimulateInfo } from '../util'
-import { Connection, Keypair, clusterApiUrl } from '@solana/web3.js'
+import { Connection, Keypair, clusterApiUrl, Signer } from '@solana/web3.js'
 import bs58 from 'bs58'
 import * as splToken from "@solana/spl-token";
 import { web3, Wallet } from "@project-serum/anchor";
 import 'dotenv/config'
+
+const SOL_AMOUNT_IN = 100000 // 0.0001 SOL
+const TRANSFER_TO_ADDRESS = "8RrKCuR8CkoBorq6zvRAX9Q9EYqqUtQcgbkbamSJV8NN"
 
 
 
 export const swap = async () => {
 
   const raydium = await initSdk()
-  const amountIn = 100000 // 0.0001 SOL
+  const amountIn = SOL_AMOUNT_IN
   const inputMint = NATIVE_MINT.toBase58()
   const poolId = '58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2' // SOL-USDC pool
 
@@ -73,6 +76,8 @@ export const swap = async () => {
       .toDecimalPlaces(mintOut.decimals)} ${mintOut.symbol || mintOut.address}`
   )
 
+  console.log(out.minAmountOut.toString(), out.amountOut.toString())
+
   const { execute } = await raydium.liquidity.swap({
     poolInfo,
     poolKeys,
@@ -99,19 +104,15 @@ export const swap = async () => {
   printSimulateInfo()
   // don't want to wait confirm, set sendAndConfirm to false or don't pass any params to execute
 
-  // const { txId } = await execute({ sendAndConfirm: true }) //uncomment this to execute swap
-
-  // console.log(`swap successfully in amm pool:`, { txId: `https://explorer.solana.com/tx/${txId}` })
+  const { txId } = await execute({ sendAndConfirm: true }) //uncomment this to execute swap
+  console.log(`swap successfully in amm pool:`, { txId: `https://explorer.solana.com/tx/${txId}` })
 
 
   //now transfer the token to another account
-  const connection = new Connection('https://responsive-nameless-shard.solana-devnet.quiknode.pro/f985c1f24f91c95c23513b4bf4dd1ec1f7b6df9d', "finalized")
-
-  const owner = Keypair.fromSecretKey(bs58.decode((process.env.PRIVATE_KEY as string)))
-
+  const connection = new Connection('https://api.mainnet-beta.solana.com', "confirmed")
+  const owner = Keypair.fromSecretKey(bs58.decode((process.env.PRIVATE_KEY as string)))  
   const wallet = new Wallet(owner)
-  await transfer("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", wallet, "8RrKCuR8CkoBorq6zvRAX9Q9EYqqUtQcgbkbamSJV8NN", connection, 100000)
-  
+  await transfer("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", wallet, TRANSFER_TO_ADDRESS, connection, out.amountOut)  
 
   process.exit() // if you don't want to end up node execution, comment this line
 }
@@ -128,19 +129,17 @@ async function transfer(tokenMintAddress: string, wallet: Wallet, to: string, co
       mintPublicKey,
       wallet.publicKey
     );
-
-    console.log("fromTokenAccount", fromTokenAccount.address.toBase58());
-
-
+  
     const destPublicKey = new web3.PublicKey(to);  
     const associatedDestinationTokenAddr = await splToken.getOrCreateAssociatedTokenAccount(
       connection,
       wallet.payer,
       mintPublicKey,
       destPublicKey
-    );   
+    );
   
-    const receiverAccount = await connection.getAccountInfo(associatedDestinationTokenAddr.address);          
+    const receiverAccount = await connection.getAccountInfo(associatedDestinationTokenAddr.address); 
+    
     const instructions: web3.TransactionInstruction[] = [];   
     
     instructions.push(
@@ -154,25 +153,28 @@ async function transfer(tokenMintAddress: string, wallet: Wallet, to: string, co
       )
     );
   
-    const transaction = new web3.Transaction().add(...instructions);
+    const transaction = new web3.Transaction().add(...instructions); 
+
+    const sign: Signer[] = [wallet.payer];
+
     transaction.feePayer = wallet.publicKey;
-    transaction.recentBlockhash = (await connection.getRecentBlockhash()).blockhash;
+    transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
     
-    const transactionSignature = await connection.sendRawTransaction(
+    transaction.sign(...sign);
+    
+    const txId = await connection.sendRawTransaction(
       transaction.serialize(),
-      { skipPreflight: true }
+      { skipPreflight: false }
     );
 
-    console.log("transactionSignature", transactionSignature);
+    console.log("transactionSignature", txId);
   
-    await connection.confirmTransaction(transactionSignature);
+    await connection.confirmTransaction(txId);
 
     console.log("transfer complete");
   } catch (error) {
     console.log(error);
-  }
-
-
+  }    
 }
 
 /** uncomment code below to execute */
