@@ -20,8 +20,11 @@ export const swap = async () => {
 
   const raydium = await initSdk()
   const amountIn = SOL_AMOUNT_IN
-  const inputMint = NATIVE_MINT.toBase58()
-  const poolId = '58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2' // SOL-USDC pool
+  // const inputMint = NATIVE_MINT.toBase58()
+  // const poolId = '58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2' // SOL-USDC pool
+
+  const inputMint = "2u9ZQVaSTVxCBVoyw75QioxivBnhLkCsJzvFTR8oGjAH" // NARA
+  const poolId = '3hsdbMFsiCh3YCsXoFjgx4TVpxECsUE9nRMgvaoyveQT' // SOL-NARA pool
 
   let poolInfo: ApiV3PoolInfoStandardItem | undefined
   let poolKeys: AmmV4Keys | undefined
@@ -32,7 +35,10 @@ export const swap = async () => {
     // if you wish to get pool info from rpc, also can modify logic to go rpc method directly
     const data = await raydium.api.fetchPoolById({ ids: poolId })
     poolInfo = data[0] as ApiV3PoolInfoStandardItem
+    console.log(poolInfo, "+++++++++")
     if (!isValidAmm(poolInfo.programId)) throw new Error('target pool is not AMM pool')
+      console.log("valid")
+    return
     poolKeys = await raydium.liquidity.getAmmPoolKeys(poolId)
     rpcData = await raydium.liquidity.getRpcPoolInfo(poolId)
   } else {
@@ -104,15 +110,15 @@ export const swap = async () => {
   printSimulateInfo()
   // don't want to wait confirm, set sendAndConfirm to false or don't pass any params to execute
 
-  const { txId } = await execute({ sendAndConfirm: true }) //uncomment this to execute swap
-  console.log(`swap successfully in amm pool:`, { txId: `https://explorer.solana.com/tx/${txId}` })
+  // const { txId } = await execute({ sendAndConfirm: true }) //uncomment this to execute swap
+  // console.log(`swap successfully in amm pool:`, { txId: `https://explorer.solana.com/tx/${txId}` })
 
 
   //now transfer the token to another account
   const connection = new Connection('https://api.mainnet-beta.solana.com', "confirmed")
   const owner = Keypair.fromSecretKey(bs58.decode((process.env.PRIVATE_KEY as string)))  
   const wallet = new Wallet(owner)
-  await transfer("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", wallet, TRANSFER_TO_ADDRESS, connection, out.amountOut)  
+  // await transfer("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", wallet, TRANSFER_TO_ADDRESS, connection, out.amountOut)  
 
   process.exit() // if you don't want to end up node execution, comment this line
 }
